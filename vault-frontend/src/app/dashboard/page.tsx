@@ -14,6 +14,24 @@ import {
   type Task,
 } from '@/lib/api';
 import Nav from '@/components/nav';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Bell,
+  BellOff,
+  Cake,
+  CalendarHeart,
+  FileText,
+  NotebookPen,
+  ListTodo,
+  CheckCheck,
+  Plus,
+  Loader2,
+  Calendar,
+  AlertTriangle,
+  Clock,
+  Sparkles,
+  Check,
+} from 'lucide-react';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -49,6 +67,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (user) load();
   }, [user, load]);
 
@@ -110,179 +129,410 @@ export default function DashboardPage() {
 
   if (authLoading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">Loading…</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-3">
+        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+        <p className="text-sm font-medium text-slate-500">Loading your vault…</p>
       </div>
     );
   }
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 16 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: 'spring' as const,
+        stiffness: 300,
+        damping: 24,
+      },
+    },
+  };
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-slate-50/60 pb-16">
       <Nav />
-      <main className="max-w-4xl mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-8">
+        {/* Header section */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+                Dashboard
+              </h1>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                <Sparkles className="w-3 h-3 mr-1 text-indigo-500" />
+                Live Vault
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 mt-1">
+              Your real-time document intelligence, upcoming reminders, and pending actions.
+            </p>
+          </div>
+        </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded">
-            {error}
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-rose-50 border border-rose-200/80 rounded-xl text-rose-800 text-sm flex items-center gap-3 shadow-xs"
+          >
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <span className="flex-1 font-medium">{error}</span>
+          </motion.div>
         )}
 
-        {loading && <p className="text-gray-400">Loading dashboard…</p>}
+        {/* Loading Skeleton */}
+        {loading && <DashboardSkeleton />}
 
+        {/* Dashboard Grid */}
         {data && (
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Alerts */}
-            <Section title="⚠️ Upcoming Alerts" count={data.alerts.length}>
-              {data.alerts.length === 0 ? (
-                <Empty>No upcoming alerts in the next 30 days.</Empty>
-              ) : (
-                <ul className="space-y-2">
-                  {data.alerts.map((evt) => (
-                    <EventRow key={evt.id} event={evt} />
-                  ))}
-                </ul>
-              )}
-            </Section>
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+          >
+            {/* 1. Alerts */}
+            <motion.div variants={itemVariants}>
+              <SectionCard
+                title="Upcoming Alerts"
+                count={data.alerts.length}
+                icon={Bell}
+                badgeColor="bg-amber-50 text-amber-700 border-amber-200/80"
+                iconBg="bg-amber-500/10 text-amber-600"
+                topAccent="border-t-amber-500"
+                description="Next 30 days critical document events"
+              >
+                {data.alerts.length === 0 ? (
+                  <EmptyState
+                    icon={BellOff}
+                    title="No upcoming alerts"
+                    description="You are all caught up for the next 30 days."
+                    accent="amber"
+                  />
+                ) : (
+                  <ul className="space-y-2.5">
+                    {data.alerts.map((evt) => (
+                      <EventRow key={evt.id} event={evt} type="alert" />
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
+            </motion.div>
 
-            {/* Birthdays */}
-            <Section title="🎂 Birthdays" count={data.birthdays.length}>
-              {data.birthdays.length === 0 ? (
-                <Empty>No upcoming birthdays.</Empty>
-              ) : (
-                <ul className="space-y-2">
-                  {data.birthdays.map((evt) => (
-                    <EventRow key={evt.id} event={evt} />
-                  ))}
-                </ul>
-              )}
-            </Section>
+            {/* 2. Birthdays */}
+            <motion.div variants={itemVariants}>
+              <SectionCard
+                title="Birthdays"
+                count={data.birthdays.length}
+                icon={Cake}
+                badgeColor="bg-rose-50 text-rose-700 border-rose-200/80"
+                iconBg="bg-rose-500/10 text-rose-600"
+                topAccent="border-t-rose-500"
+                description="Upcoming celebration dates extracted from vault"
+              >
+                {data.birthdays.length === 0 ? (
+                  <EmptyState
+                    icon={CalendarHeart}
+                    title="No upcoming birthdays"
+                    description="No birthdays recorded in your vault yet."
+                    accent="rose"
+                  />
+                ) : (
+                  <ul className="space-y-2.5">
+                    {data.birthdays.map((evt) => (
+                      <EventRow key={evt.id} event={evt} type="birthday" />
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
+            </motion.div>
 
-            {/* Notes */}
-            <Section title="📝 Notes" count={data.notes.length}>
-              <form onSubmit={handleAddNote} className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  placeholder="Add a note…"
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="submit"
-                  disabled={addingNote || !noteContent.trim()}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </form>
-              {data.notes.length === 0 ? (
-                <Empty>No notes yet.</Empty>
-              ) : (
-                <ul className="space-y-2">
-                  {data.notes.map((note) => (
-                    <NoteRow key={note.id} note={note} />
-                  ))}
-                </ul>
-              )}
-            </Section>
+            {/* 3. Notes */}
+            <motion.div variants={itemVariants}>
+              <SectionCard
+                title="Quick Notes"
+                count={data.notes.length}
+                icon={FileText}
+                badgeColor="bg-indigo-50 text-indigo-700 border-indigo-200/80"
+                iconBg="bg-indigo-500/10 text-indigo-600"
+                topAccent="border-t-indigo-500"
+                description="Personal thoughts and quick reminders"
+              >
+                <form onSubmit={handleAddNote} className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Write a quick note…"
+                    value={noteContent}
+                    onChange={(e) => setNoteContent(e.target.value)}
+                    className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    type="submit"
+                    disabled={addingNote || !noteContent.trim()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:pointer-events-none transition shadow-sm shadow-indigo-600/10 cursor-pointer"
+                  >
+                    {addingNote ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    <span>Add</span>
+                  </motion.button>
+                </form>
 
-            {/* Tasks */}
-            <Section title="✅ Tasks" count={data.tasks.length}>
-              <form onSubmit={handleAddTask} className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  placeholder="Task title…"
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="date"
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                  className="px-2 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="submit"
-                  disabled={addingTask || !taskTitle.trim()}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </form>
-              {data.tasks.length === 0 ? (
-                <Empty>No tasks yet.</Empty>
-              ) : (
-                <ul className="space-y-2">
-                  {data.tasks.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={handleToggleTask}
+                {data.notes.length === 0 ? (
+                  <EmptyState
+                    icon={NotebookPen}
+                    title="No notes yet"
+                    description="Capture a thought or paste important reference info above."
+                    accent="indigo"
+                  />
+                ) : (
+                  <ul className="space-y-2.5">
+                    <AnimatePresence initial={false}>
+                      {data.notes.map((note) => (
+                        <NoteRow key={note.id} note={note} />
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                )}
+              </SectionCard>
+            </motion.div>
+
+            {/* 4. Tasks */}
+            <motion.div variants={itemVariants}>
+              <SectionCard
+                title="Action Tasks"
+                count={data.tasks.length}
+                icon={ListTodo}
+                badgeColor="bg-emerald-50 text-emerald-700 border-emerald-200/80"
+                iconBg="bg-emerald-500/10 text-emerald-600"
+                topAccent="border-t-emerald-500"
+                description="To-dos and checklist items"
+              >
+                <form onSubmit={handleAddTask} className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <input
+                    type="text"
+                    placeholder="What needs to be done?…"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={taskDueDate}
+                      onChange={(e) => setTaskDueDate(e.target.value)}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer"
                     />
-                  ))}
-                </ul>
-              )}
-            </Section>
-          </div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      type="submit"
+                      disabled={addingTask || !taskTitle.trim()}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:pointer-events-none transition shadow-sm shadow-emerald-600/10 cursor-pointer"
+                    >
+                      {addingTask ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      <span>Add</span>
+                    </motion.button>
+                  </div>
+                </form>
+
+                {data.tasks.length === 0 ? (
+                  <EmptyState
+                    icon={CheckCheck}
+                    title="No tasks yet"
+                    description="Keep yourself accountable by adding your first task above."
+                    accent="emerald"
+                  />
+                ) : (
+                  <ul className="space-y-2.5">
+                    <AnimatePresence initial={false}>
+                      {data.tasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onToggle={handleToggleTask}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </ul>
+                )}
+              </SectionCard>
+            </motion.div>
+          </motion.div>
         )}
       </main>
     </div>
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────
+// ── Sub-components & Helpers ────────────────────────────────────────────────
 
-function Section({
-  title,
-  count,
-  children,
-}: {
+interface SectionCardProps {
   title: string;
   count: number;
+  icon: React.ComponentType<{ className?: string }>;
+  badgeColor: string;
+  iconBg: string;
+  topAccent: string;
+  description: string;
   children: React.ReactNode;
-}) {
+}
+
+function SectionCard({
+  title,
+  count,
+  icon: Icon,
+  badgeColor,
+  iconBg,
+  topAccent,
+  description,
+  children,
+}: SectionCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow p-5">
-      <h2 className="text-lg font-semibold mb-3">
-        {title}{' '}
-        <span className="text-sm text-gray-400 font-normal">({count})</span>
-      </h2>
-      {children}
+    <div
+      className={`bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.06)] transition-all duration-300 overflow-hidden border-t-4 ${topAccent} flex flex-col h-full`}
+    >
+      <div className="p-5 sm:p-6 pb-4 border-b border-slate-100 flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${iconBg}`}>
+            <Icon className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+              {title}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">{description}</p>
+          </div>
+        </div>
+
+        <span
+          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badgeColor}`}
+        >
+          {count}
+        </span>
+      </div>
+
+      <div className="p-5 sm:p-6 flex-1 flex flex-col">{children}</div>
     </div>
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-gray-400">{children}</p>;
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  accent,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  accent: 'amber' | 'rose' | 'indigo' | 'emerald';
+}) {
+  const accentClasses = {
+    amber: 'bg-amber-50 text-amber-500 border-amber-100',
+    rose: 'bg-rose-50 text-rose-500 border-rose-100',
+    indigo: 'bg-indigo-50 text-indigo-500 border-indigo-100',
+    emerald: 'bg-emerald-50 text-emerald-500 border-emerald-100',
+  }[accent];
+
+  return (
+    <div className="my-auto py-8 px-4 flex flex-col items-center justify-center text-center">
+      <div
+        className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 shadow-xs ${accentClasses}`}
+      >
+        <Icon className="w-6 h-6" />
+      </div>
+      <p className="text-sm font-semibold text-slate-800">{title}</p>
+      <p className="text-xs text-slate-400 max-w-xs mt-1 leading-relaxed">
+        {description}
+      </p>
+    </div>
+  );
 }
 
-function EventRow({ event }: { event: DashboardEvent }) {
+function EventRow({
+  event,
+  type,
+}: {
+  event: DashboardEvent;
+  type: 'alert' | 'birthday';
+}) {
+  const isAlert = type === 'alert';
   return (
-    <li className="text-sm p-2 bg-gray-50 rounded flex justify-between items-start">
-      <span>
-        <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs mr-2">
+    <motion.li
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="group p-3 bg-slate-50/70 hover:bg-slate-50 border border-slate-200/60 hover:border-slate-300/80 rounded-xl flex items-start justify-between gap-3 transition-colors"
+    >
+      <div className="flex items-start gap-2.5 min-w-0">
+        <span
+          className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium uppercase tracking-wider ${
+            isAlert
+              ? 'bg-amber-100/80 text-amber-800 border border-amber-200/60'
+              : 'bg-rose-100/80 text-rose-800 border border-rose-200/60'
+          }`}
+        >
           {event.event_type}
         </span>
-        {event.description || 'No description'}
-      </span>
-      <span className="text-gray-500 whitespace-nowrap ml-2">
-        {event.event_date || '—'}
-        {event.amount != null && ` • $${event.amount}`}
-      </span>
-    </li>
+        <span className="text-sm font-medium text-slate-700 truncate group-hover:text-slate-900 transition-colors">
+          {event.description || 'No description provided'}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0 text-xs text-slate-500 font-medium">
+        <span className="inline-flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-slate-200/60 shadow-2xs">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          {event.event_date || '—'}
+        </span>
+        {event.amount != null && (
+          <span className="font-semibold text-slate-700 bg-white px-2 py-1 rounded-md border border-slate-200/60 shadow-2xs">
+            ${event.amount}
+          </span>
+        )}
+      </div>
+    </motion.li>
   );
 }
 
 function NoteRow({ note }: { note: Note }) {
   return (
-    <li className="text-sm p-2 bg-gray-50 rounded flex justify-between">
-      <span>{note.content}</span>
-      <span className="text-xs text-gray-400 whitespace-nowrap ml-2">
-        {new Date(note.created_at).toLocaleDateString()}
-      </span>
-    </li>
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.2 }}
+      className="p-3.5 bg-slate-50/80 hover:bg-slate-50 border border-slate-200/70 hover:border-slate-300 rounded-xl flex justify-between items-start gap-3 transition-colors shadow-2xs"
+    >
+      <p className="text-sm text-slate-800 leading-relaxed break-words flex-1">
+        {note.content}
+      </p>
+      <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 shrink-0 whitespace-nowrap bg-white px-2 py-0.5 rounded-md border border-slate-200/60">
+        <Clock className="w-3 h-3" />
+        <span>{new Date(note.created_at).toLocaleDateString()}</span>
+      </div>
+    </motion.li>
   );
 }
 
@@ -294,19 +544,89 @@ function TaskRow({
   onToggle: (task: Task) => void;
 }) {
   return (
-    <li className="text-sm p-2 bg-gray-50 rounded flex items-center gap-2">
-      <input
-        type="checkbox"
-        checked={task.is_done}
-        onChange={() => onToggle(task)}
-        className="w-4 h-4 accent-blue-600"
-      />
-      <span className={task.is_done ? 'line-through text-gray-400' : ''}>
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.2 }}
+      onClick={() => onToggle(task)}
+      className={`group p-3 border rounded-xl flex items-center gap-3 transition-all cursor-pointer shadow-2xs ${
+        task.is_done
+          ? 'bg-slate-50/50 border-slate-200/50 opacity-75'
+          : 'bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300'
+      }`}
+    >
+      <div
+        className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+          task.is_done
+            ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+            : 'border-slate-300 bg-white group-hover:border-emerald-500'
+        }`}
+      >
+        {task.is_done && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+          >
+            <Check className="w-3.5 h-3.5 stroke-[3]" />
+          </motion.div>
+        )}
+      </div>
+
+      <span
+        className={`text-sm flex-1 transition-all ${
+          task.is_done
+            ? 'line-through text-slate-400 font-normal'
+            : 'text-slate-800 font-medium group-hover:text-slate-900'
+        }`}
+      >
         {task.title}
       </span>
+
       {task.due_date && (
-        <span className="ml-auto text-xs text-gray-400">{task.due_date}</span>
+        <span
+          className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md border font-medium ${
+            task.is_done
+              ? 'bg-slate-100 text-slate-400 border-slate-200/50'
+              : 'bg-slate-50 text-slate-500 border-slate-200/80 group-hover:border-slate-300'
+          }`}
+        >
+          <Calendar className="w-3 h-3 text-slate-400" />
+          {task.due_date}
+        </span>
       )}
-    </li>
+    </motion.li>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-pulse">
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4"
+        >
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-slate-200 rounded-xl" />
+              <div className="space-y-1.5">
+                <div className="w-28 h-4 bg-slate-200 rounded" />
+                <div className="w-40 h-3 bg-slate-100 rounded" />
+              </div>
+            </div>
+            <div className="w-6 h-4 bg-slate-200 rounded-full" />
+          </div>
+
+          <div className="space-y-2.5 pt-2">
+            <div className="w-full h-11 bg-slate-100 rounded-xl" />
+            <div className="w-full h-11 bg-slate-100 rounded-xl" />
+            <div className="w-full h-11 bg-slate-100 rounded-xl" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

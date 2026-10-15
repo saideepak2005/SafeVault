@@ -25,7 +25,11 @@ function chunkText(text) {
 async function storeChunks(supabase, { fileId, userId, category, text }) {
   const pieces = chunkText(text);
   const rows = [];
-  for (const content of pieces) {
+  for (let i = 0; i < pieces.length; i++) {
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+    const content = pieces[i];
     const embedding = await embedText(content);
     rows.push({ file_id: fileId, user_id: userId, category, content, embedding });
   }
