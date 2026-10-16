@@ -50,12 +50,20 @@ export async function uploadFile(file: File) {
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────
-export async function sendChatMessage(question: string, category?: string) {
+export async function sendChatMessage(
+  question: string,
+  category?: string,
+  history?: Array<{ role: string; content: string }>
+) {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/api/chat`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, category: category || undefined }),
+    body: JSON.stringify({
+      question,
+      category: category || undefined,
+      history: history || undefined,
+    }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
@@ -69,13 +77,18 @@ export async function sendChatMessage(question: string, category?: string) {
       fileName: string;
       similarity: number;
     }>;
+    mode?: 'files' | 'general' | 'mixed' | 'action';
+    actions?: Array<{
+      type: string;
+      data: unknown;
+    }>;
   }>;
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
 export interface DashboardEvent {
   id: string;
-  file_id: string;
+  file_id: string | null;
   event_type: string;
   event_date: string | null;
   description: string | null;
@@ -111,6 +124,25 @@ export async function fetchDashboard(): Promise<DashboardData> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || 'Dashboard fetch failed');
+  }
+  return res.json();
+}
+
+export async function addEvent(event: {
+  event_type: string;
+  event_date: string;
+  description: string;
+  amount?: number | null;
+}): Promise<DashboardEvent> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api/dashboard/events`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || 'Add event failed');
   }
   return res.json();
 }
@@ -156,3 +188,40 @@ export async function toggleTask(id: string, is_done: boolean): Promise<Task> {
   }
   return res.json();
 }
+
+export async function deleteEvent(id: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api/dashboard/events/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || 'Delete event failed');
+  }
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api/dashboard/notes/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || 'Delete note failed');
+  }
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api/dashboard/tasks/${id}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || 'Delete task failed');
+  }
+}
+

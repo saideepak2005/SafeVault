@@ -33,7 +33,7 @@ create table if not exists chunks (
 -- 4. Extracted events: structured facts pulled out at upload time - powers the dashboard
 create table if not exists extracted_events (
   id uuid primary key default gen_random_uuid(),
-  file_id uuid not null references files(id) on delete cascade,
+  file_id uuid references files(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   event_type text not null check (
     event_type in ('expiry', 'renewal', 'due_date', 'birthday', 'amount', 'other')
@@ -43,6 +43,8 @@ create table if not exists extracted_events (
   amount numeric,
   created_at timestamptz not null default now()
 );
+
+alter table extracted_events alter column file_id drop not null;
 
 -- 5. Notes and tasks: manually added by the user, shown on the dashboard alongside extracted_events
 create table if not exists notes (

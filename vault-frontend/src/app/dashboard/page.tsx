@@ -8,6 +8,10 @@ import {
   addNote,
   addTask,
   toggleTask,
+  addEvent,
+  deleteEvent,
+  deleteNote,
+  deleteTask,
   type DashboardData,
   type DashboardEvent,
   type Note,
@@ -31,6 +35,7 @@ import {
   Clock,
   Sparkles,
   Check,
+  Trash2,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -44,6 +49,17 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Alerts form
+  const [alertWhat, setAlertWhat] = useState('');
+  const [alertDate, setAlertDate] = useState('');
+  const [alertType, setAlertType] = useState<'due_date' | 'renewal' | 'expiry' | 'other'>('due_date');
+  const [addingAlert, setAddingAlert] = useState(false);
+
+  // Birthdays form
+  const [birthdayName, setBirthdayName] = useState('');
+  const [birthdayDate, setBirthdayDate] = useState('');
+  const [addingBirthday, setAddingBirthday] = useState(false);
 
   // Note form
   const [noteContent, setNoteContent] = useState('');
@@ -70,6 +86,47 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (user) load();
   }, [user, load]);
+
+  async function handleAddAlert(e: React.FormEvent) {
+    e.preventDefault();
+    if (!alertWhat.trim() || !alertDate || addingAlert) return;
+    setAddingAlert(true);
+    try {
+      await addEvent({
+        description: alertWhat.trim(),
+        event_date: alertDate,
+        event_type: alertType,
+      });
+      await load();
+      setAlertWhat('');
+      setAlertDate('');
+      setAlertType('due_date');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add alert');
+    } finally {
+      setAddingAlert(false);
+    }
+  }
+
+  async function handleAddBirthday(e: React.FormEvent) {
+    e.preventDefault();
+    if (!birthdayName.trim() || !birthdayDate || addingBirthday) return;
+    setAddingBirthday(true);
+    try {
+      await addEvent({
+        description: birthdayName.trim(),
+        event_date: birthdayDate,
+        event_type: 'birthday',
+      });
+      await load();
+      setBirthdayName('');
+      setBirthdayDate('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add birthday');
+    } finally {
+      setAddingBirthday(false);
+    }
+  }
 
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
@@ -124,6 +181,50 @@ export default function DashboardPage() {
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update task');
+    }
+  }
+
+  async function handleDeleteAlert(id: string) {
+    try {
+      await deleteEvent(id);
+      setData((prev) =>
+        prev ? { ...prev, alerts: prev.alerts.filter((a) => a.id !== id) } : prev,
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete alert');
+    }
+  }
+
+  async function handleDeleteBirthday(id: string) {
+    try {
+      await deleteEvent(id);
+      setData((prev) =>
+        prev ? { ...prev, birthdays: prev.birthdays.filter((b) => b.id !== id) } : prev,
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete birthday');
+    }
+  }
+
+  async function handleDeleteNote(id: string) {
+    try {
+      await deleteNote(id);
+      setData((prev) =>
+        prev ? { ...prev, notes: prev.notes.filter((n) => n.id !== id) } : prev,
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete note');
+    }
+  }
+
+  async function handleDeleteTask(id: string) {
+    try {
+      await deleteTask(id);
+      setData((prev) =>
+        prev ? { ...prev, tasks: prev.tasks.filter((t) => t.id !== id) } : prev,
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete task');
     }
   }
 
@@ -215,6 +316,54 @@ export default function DashboardPage() {
                 topAccent="border-t-amber-500"
                 description="Next 30 days critical document events"
               >
+                <form onSubmit={handleAddAlert} className="flex flex-col gap-2 mb-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Alert description (e.g. Insurance renewal)…"
+                      value={alertWhat}
+                      onChange={(e) => setAlertWhat(e.target.value)}
+                      className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                    <input
+                      type="date"
+                      value={alertDate}
+                      onChange={(e) => setAlertDate(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all cursor-pointer"
+                    />
+                    <select
+                      value={alertType}
+                      onChange={(e) =>
+                        setAlertType(
+                          e.target.value as 'due_date' | 'renewal' | 'expiry' | 'other'
+                        )
+                      }
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all cursor-pointer"
+                    >
+                      <option value="due_date">Due Date</option>
+                      <option value="renewal">Renewal</option>
+                      <option value="expiry">Expiry</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      type="submit"
+                      disabled={addingAlert || !alertWhat.trim() || !alertDate}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-xl hover:bg-amber-700 active:bg-amber-800 disabled:opacity-50 disabled:pointer-events-none transition shadow-sm shadow-amber-600/10 cursor-pointer"
+                    >
+                      {addingAlert ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      <span>Add</span>
+                    </motion.button>
+                  </div>
+                </form>
+
                 {data.alerts.length === 0 ? (
                   <EmptyState
                     icon={BellOff}
@@ -224,9 +373,16 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <ul className="space-y-2.5">
-                    {data.alerts.map((evt) => (
-                      <EventRow key={evt.id} event={evt} type="alert" />
-                    ))}
+                    <AnimatePresence initial={false}>
+                      {data.alerts.map((evt) => (
+                        <EventRow
+                          key={evt.id}
+                          event={evt}
+                          type="alert"
+                          onDelete={handleDeleteAlert}
+                        />
+                      ))}
+                    </AnimatePresence>
                   </ul>
                 )}
               </SectionCard>
@@ -243,6 +399,38 @@ export default function DashboardPage() {
                 topAccent="border-t-rose-500"
                 description="Upcoming celebration dates extracted from vault"
               >
+                <form onSubmit={handleAddBirthday} className="flex flex-col sm:flex-row gap-2 mb-4">
+                  <input
+                    type="text"
+                    placeholder="Name (e.g. Upender)…"
+                    value={birthdayName}
+                    onChange={(e) => setBirthdayName(e.target.value)}
+                    className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={birthdayDate}
+                      onChange={(e) => setBirthdayDate(e.target.value)}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all cursor-pointer"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      type="submit"
+                      disabled={addingBirthday || !birthdayName.trim() || !birthdayDate}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-rose-600 text-white text-sm font-medium rounded-xl hover:bg-rose-700 active:bg-rose-800 disabled:opacity-50 disabled:pointer-events-none transition shadow-sm shadow-rose-600/10 cursor-pointer"
+                    >
+                      {addingBirthday ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Plus className="w-4 h-4" />
+                      )}
+                      <span>Add</span>
+                    </motion.button>
+                  </div>
+                </form>
+
                 {data.birthdays.length === 0 ? (
                   <EmptyState
                     icon={CalendarHeart}
@@ -252,9 +440,16 @@ export default function DashboardPage() {
                   />
                 ) : (
                   <ul className="space-y-2.5">
-                    {data.birthdays.map((evt) => (
-                      <EventRow key={evt.id} event={evt} type="birthday" />
-                    ))}
+                    <AnimatePresence initial={false}>
+                      {data.birthdays.map((evt) => (
+                        <EventRow
+                          key={evt.id}
+                          event={evt}
+                          type="birthday"
+                          onDelete={handleDeleteBirthday}
+                        />
+                      ))}
+                    </AnimatePresence>
                   </ul>
                 )}
               </SectionCard>
@@ -306,7 +501,11 @@ export default function DashboardPage() {
                   <ul className="space-y-2.5">
                     <AnimatePresence initial={false}>
                       {data.notes.map((note) => (
-                        <NoteRow key={note.id} note={note} />
+                        <NoteRow
+                          key={note.id}
+                          note={note}
+                          onDelete={handleDeleteNote}
+                        />
                       ))}
                     </AnimatePresence>
                   </ul>
@@ -372,6 +571,7 @@ export default function DashboardPage() {
                           key={task.id}
                           task={task}
                           onToggle={handleToggleTask}
+                          onDelete={handleDeleteTask}
                         />
                       ))}
                     </AnimatePresence>
@@ -474,18 +674,23 @@ function EmptyState({
 function EventRow({
   event,
   type,
+  onDelete,
 }: {
   event: DashboardEvent;
   type: 'alert' | 'birthday';
+  onDelete?: (id: string) => void;
 }) {
   const isAlert = type === 'alert';
   return (
     <motion.li
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="group p-3 bg-slate-50/70 hover:bg-slate-50 border border-slate-200/60 hover:border-slate-300/80 rounded-xl flex items-start justify-between gap-3 transition-colors"
+      layout
+      initial={{ opacity: 0, y: 4, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.94, height: 0, marginBottom: 0, padding: 0 }}
+      transition={{ duration: 0.2 }}
+      className="group p-3 bg-slate-50/70 hover:bg-slate-50 border border-slate-200/60 hover:border-slate-300/80 rounded-xl flex items-center justify-between gap-3 transition-colors overflow-hidden"
     >
-      <div className="flex items-start gap-2.5 min-w-0">
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
         <span
           className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium uppercase tracking-wider ${
             isAlert
@@ -510,27 +715,61 @@ function EventRow({
             ${event.amount}
           </span>
         )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(event.id);
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </motion.li>
   );
 }
 
-function NoteRow({ note }: { note: Note }) {
+function NoteRow({
+  note,
+  onDelete,
+}: {
+  note: Note;
+  onDelete?: (id: string) => void;
+}) {
   return (
     <motion.li
       layout
       initial={{ opacity: 0, y: -10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
+      exit={{ opacity: 0, scale: 0.96, height: 0, marginBottom: 0, padding: 0 }}
       transition={{ duration: 0.2 }}
-      className="p-3.5 bg-slate-50/80 hover:bg-slate-50 border border-slate-200/70 hover:border-slate-300 rounded-xl flex justify-between items-start gap-3 transition-colors shadow-2xs"
+      className="group p-3.5 bg-slate-50/80 hover:bg-slate-50 border border-slate-200/70 hover:border-slate-300 rounded-xl flex justify-between items-start gap-3 transition-colors shadow-2xs overflow-hidden"
     >
       <p className="text-sm text-slate-800 leading-relaxed break-words flex-1">
         {note.content}
       </p>
-      <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 shrink-0 whitespace-nowrap bg-white px-2 py-0.5 rounded-md border border-slate-200/60">
-        <Clock className="w-3 h-3" />
-        <span>{new Date(note.created_at).toLocaleDateString()}</span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 text-[11px] font-medium text-slate-400 whitespace-nowrap bg-white px-2 py-0.5 rounded-md border border-slate-200/60">
+          <Clock className="w-3 h-3" />
+          <span>{new Date(note.created_at).toLocaleDateString()}</span>
+        </div>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(note.id);
+            }}
+            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </motion.li>
   );
@@ -539,19 +778,21 @@ function NoteRow({ note }: { note: Note }) {
 function TaskRow({
   task,
   onToggle,
+  onDelete,
 }: {
   task: Task;
   onToggle: (task: Task) => void;
+  onDelete?: (id: string) => void;
 }) {
   return (
     <motion.li
       layout
       initial={{ opacity: 0, y: -10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
+      exit={{ opacity: 0, scale: 0.96, height: 0, marginBottom: 0, padding: 0 }}
       transition={{ duration: 0.2 }}
       onClick={() => onToggle(task)}
-      className={`group p-3 border rounded-xl flex items-center gap-3 transition-all cursor-pointer shadow-2xs ${
+      className={`group p-3 border rounded-xl flex items-center gap-3 transition-all cursor-pointer shadow-2xs overflow-hidden ${
         task.is_done
           ? 'bg-slate-50/50 border-slate-200/50 opacity-75'
           : 'bg-white hover:bg-slate-50/80 border-slate-200/80 hover:border-slate-300'
@@ -596,6 +837,20 @@ function TaskRow({
           <Calendar className="w-3 h-3 text-slate-400" />
           {task.due_date}
         </span>
+      )}
+
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(task.id);
+          }}
+          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+          title="Delete"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
       )}
     </motion.li>
   );

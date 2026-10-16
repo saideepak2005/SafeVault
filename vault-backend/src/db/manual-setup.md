@@ -59,3 +59,13 @@ After running the SQL:
   - `users read own folder` (SELECT)
 
 That's all the manual work. The rest of the schema (tables, RLS, pgvector function) is already in `src/db/schema.sql` and was applied when you ran that file.
+
+---
+
+## 4. Allow Manual Events (Nullable file_id)
+
+Run this query in Supabase SQL Editor:
+
+```sql
+alter table extracted_events alter column file_id drop not null;
+```

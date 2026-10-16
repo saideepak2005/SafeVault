@@ -13,6 +13,7 @@ import {
   Sparkles,
   FileText,
   Loader2,
+  Check,
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -20,6 +21,7 @@ interface ChatMessage {
   text: string;
   sources?: Array<{ fileId: string; fileName: string; similarity: number }>;
   provider?: string | null;
+  mode?: 'files' | 'general' | 'mixed' | 'action';
 }
 
 export default function ChatPage() {
@@ -45,11 +47,18 @@ export default function ChatPage() {
     if (!question || sending) return;
 
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', text: question }]);
+    const userMsg: ChatMessage = { role: 'user', text: question };
+    const currentMessages = [...messages, userMsg];
+    setMessages(currentMessages);
     setSending(true);
 
+    const historyPayload = messages.slice(-6).map((m) => ({
+      role: m.role,
+      content: m.text,
+    }));
+
     try {
-      const data = await sendChatMessage(question);
+      const data = await sendChatMessage(question, undefined, historyPayload);
       setMessages((prev) => [
         ...prev,
         {
@@ -57,6 +66,7 @@ export default function ChatPage() {
           text: data.answer,
           sources: data.sources,
           provider: data.provider,
+          mode: data.mode,
         },
       ]);
     } catch (err: unknown) {
@@ -163,6 +173,35 @@ export default function ChatPage() {
                       : 'bg-white border border-slate-200/80 rounded-tl-xs shadow-[0_2px_8px_rgba(0,0,0,0.03)] text-slate-800'
                   }`}
                 >
+                  {msg.role === 'assistant' && msg.mode && (
+                    <div className="mb-2">
+                      {msg.mode === 'files' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <FileText className="w-3 h-3 text-emerald-600" />
+                          From your files
+                        </span>
+                      )}
+                      {msg.mode === 'general' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                          <Sparkles className="w-3 h-3 text-blue-500" />
+                          General knowledge
+                        </span>
+                      )}
+                      {msg.mode === 'action' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/60">
+                          <Check className="w-3 h-3 text-purple-500" />
+                          Added to dashboard
+                        </span>
+                      )}
+                      {msg.mode === 'mixed' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200/60">
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          From your files + General
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   <p className="whitespace-pre-wrap">{msg.text}</p>
 
                   {/* Sources */}

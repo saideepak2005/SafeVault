@@ -1,5 +1,10 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const {
+  ALLOWED_EVENT_TYPES,
+  isValidDate,
+  getNextBirthdayDate,
+} = require('../services/eventHelpers');
 
 const router = express.Router();
 
@@ -12,23 +17,36 @@ router.get('/', requireAuth, async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-    const [eventsRes, notesRes, tasksRes] = await Promise.all([
+    const [alertsRes, birthdaysRes, notesRes, tasksRes] = await Promise.all([
       req.supabase
         .from('extracted_events')
         .select('id, file_id, event_type, event_date, description, amount')
+        .neq('event_type', 'birthday')
         .gte('event_date', today)
         .lte('event_date', in30Days)
         .order('event_date', { ascending: true }),
+      req.supabase
+        .from('extracted_events')
+        .select('id, file_id, event_type, event_date, description, amount')
+        .eq('event_type', 'birthday')
+        .not('event_date', 'is', null),
       req.supabase.from('notes').select('*').order('created_at', { ascending: false }).limit(20),
       req.supabase.from('tasks').select('*').order('due_date', { ascending: true, nullsFirst: false }),
     ]);
 
-    if (eventsRes.error) throw new Error(eventsRes.error.message);
+    if (alertsRes.error) throw new Error(alertsRes.error.message);
+    if (birthdaysRes.error) throw new Error(birthdaysRes.error.message);
     if (notesRes.error) throw new Error(notesRes.error.message);
     if (tasksRes.error) throw new Error(tasksRes.error.message);
 
-    const alerts = (eventsRes.data || []).filter((e) => e.event_type !== 'birthday');
-    const birthdays = (eventsRes.data || []).filter((e) => e.event_type === 'birthday');
+    const alerts = alertsRes.data || [];
+    const birthdays = (birthdaysRes.data || [])
+      .map((b) => {
+        const nextDate = getNextBirthdayDate(b.event_date, today);
+        return { ...b, event_date: nextDate };
+      })
+      .filter((b) => b.event_date && b.event_date >= today && b.event_date <= in30Days)
+      .sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
 
     res.json({
       alerts,
@@ -40,6 +58,38 @@ router.get('/', requireAuth, async (req, res) => {
     console.error('Dashboard fetch failed:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /api/dashboard/events { event_type, event_date, description, amount? }
+router.post('/events', requireAuth, async (req, res) => {
+  const { event_type, event_date, description, amount } = req.body || {};
+
+  if (!description || typeof description !== 'string' || description.trim().length === 0) {
+    return res.status(400).json({ error: '"description" is required' });
+  }
+
+  if (!isValidDate(event_date)) {
+    return res.status(400).json({ error: 'Valid event_date "YYYY-MM-DD" is required' });
+  }
+
+  const clampedType = ALLOWED_EVENT_TYPES.includes(event_type) ? event_type : 'other';
+  const numAmount = amount != null && !isNaN(Number(amount)) ? Number(amount) : null;
+
+  const { data, error } = await req.supabase
+    .from('extracted_events')
+    .insert({
+      user_id: req.user.id,
+      file_id: null,
+      event_type: clampedType,
+      event_date,
+      description: description.trim(),
+      amount: numAmount,
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.status(201).json(data);
 });
 
 // POST /api/dashboard/notes  { content: string }
@@ -63,6 +113,9 @@ router.post('/tasks', requireAuth, async (req, res) => {
   if (!title || typeof title !== 'string' || title.trim().length === 0) {
     return res.status(400).json({ error: '"title" is required' });
   }
+  if (due_date && !isValidDate(due_date)) {
+    return res.status(400).json({ error: 'Invalid due_date' });
+  }
   const { data, error } = await req.supabase
     .from('tasks')
     .insert({ user_id: req.user.id, title: title.trim(), due_date: due_date || null })
@@ -83,6 +136,36 @@ router.patch('/tasks/:id', requireAuth, async (req, res) => {
     .single();
   if (error) return res.status(500).json({ error: error.message });
   res.json(data);
+});
+
+// DELETE /api/dashboard/events/:id
+router.delete('/events/:id', requireAuth, async (req, res) => {
+  const { error } = await req.supabase
+    .from('extracted_events')
+    .delete()
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// DELETE /api/dashboard/notes/:id
+router.delete('/notes/:id', requireAuth, async (req, res) => {
+  const { error } = await req.supabase
+    .from('notes')
+    .delete()
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// DELETE /api/dashboard/tasks/:id
+router.delete('/tasks/:id', requireAuth, async (req, res) => {
+  const { error } = await req.supabase
+    .from('tasks')
+    .delete()
+    .eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
 });
 
 module.exports = router;
