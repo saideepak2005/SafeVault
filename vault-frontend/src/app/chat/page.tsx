@@ -21,7 +21,7 @@ interface ChatMessage {
   text: string;
   sources?: Array<{ fileId: string; fileName: string; similarity: number }>;
   provider?: string | null;
-  mode?: 'files' | 'general' | 'mixed' | 'action';
+  mode?: 'dashboard' | 'files' | 'general' | 'mixed' | 'action';
 }
 
 export default function ChatPage() {
@@ -57,8 +57,15 @@ export default function ChatPage() {
       content: m.text,
     }));
 
+    // Local client date in YYYY-MM-DD
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const client_date = `${y}-${m}-${d}`;
+
     try {
-      const data = await sendChatMessage(question, undefined, historyPayload);
+      const data = await sendChatMessage(question, undefined, historyPayload, client_date);
       setMessages((prev) => [
         ...prev,
         {
@@ -175,6 +182,12 @@ export default function ChatPage() {
                 >
                   {msg.role === 'assistant' && msg.mode && (
                     <div className="mb-2">
+                      {msg.mode === 'dashboard' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                          <Sparkles className="w-3 h-3 text-indigo-500" />
+                          From your dashboard
+                        </span>
+                      )}
                       {msg.mode === 'files' && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                           <FileText className="w-3 h-3 text-emerald-600" />

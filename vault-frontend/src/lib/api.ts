@@ -53,7 +53,8 @@ export async function uploadFile(file: File) {
 export async function sendChatMessage(
   question: string,
   category?: string,
-  history?: Array<{ role: string; content: string }>
+  history?: Array<{ role: string; content: string }>,
+  client_date?: string
 ) {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/api/chat`, {
@@ -63,6 +64,7 @@ export async function sendChatMessage(
       question,
       category: category || undefined,
       history: history || undefined,
+      client_date: client_date || undefined,
     }),
   });
   if (!res.ok) {
@@ -77,7 +79,7 @@ export async function sendChatMessage(
       fileName: string;
       similarity: number;
     }>;
-    mode?: 'files' | 'general' | 'mixed' | 'action';
+    mode?: 'dashboard' | 'files' | 'general' | 'mixed' | 'action';
     actions?: Array<{
       type: string;
       data: unknown;
@@ -93,6 +95,8 @@ export interface DashboardEvent {
   event_date: string | null;
   description: string | null;
   amount: number | null;
+  next_occurrence?: string | null;
+  days_until?: number | null;
 }
 
 export interface Note {
@@ -118,9 +122,12 @@ export interface DashboardData {
   tasks: Task[];
 }
 
-export async function fetchDashboard(): Promise<DashboardData> {
+export async function fetchDashboard(today?: string): Promise<DashboardData> {
   const headers = await authHeaders();
-  const res = await fetch(`${API_URL}/api/dashboard`, { headers });
+  const url = today
+    ? `${API_URL}/api/dashboard?today=${encodeURIComponent(today)}`
+    : `${API_URL}/api/dashboard`;
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(body.error || 'Dashboard fetch failed');

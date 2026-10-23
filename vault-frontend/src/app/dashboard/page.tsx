@@ -73,8 +73,13 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const d = await fetchDashboard();
-      setData(d);
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const dateDay = String(now.getDate()).padStart(2, '0');
+      const localToday = `${y}-${m}-${dateDay}`;
+      const data = await fetchDashboard(localToday);
+      setData(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
     } finally {
@@ -681,6 +686,18 @@ function EventRow({
   onDelete?: (id: string) => void;
 }) {
   const isAlert = type === 'alert';
+  const isBirthday = type === 'birthday';
+  const isWithin30 =
+    event.days_until != null && event.days_until <= 30 && event.days_until >= 0;
+
+  let daysLabel: string | null = null;
+  if (event.days_until != null) {
+    if (event.days_until === 0) daysLabel = 'today';
+    else if (event.days_until === 1) daysLabel = 'tomorrow';
+    else if (event.days_until > 1) daysLabel = `in ${event.days_until} days`;
+    else daysLabel = `${Math.abs(event.days_until)} days ago`;
+  }
+
   return (
     <motion.li
       layout
@@ -688,13 +705,19 @@ function EventRow({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.94, height: 0, marginBottom: 0, padding: 0 }}
       transition={{ duration: 0.2 }}
-      className="group p-3 bg-slate-50/70 hover:bg-slate-50 border border-slate-200/60 hover:border-slate-300/80 rounded-xl flex items-center justify-between gap-3 transition-colors overflow-hidden"
+      className={`group p-3 border rounded-xl flex items-center justify-between gap-3 transition-colors overflow-hidden ${
+        isBirthday && isWithin30
+          ? 'bg-rose-50/70 border-rose-200/90 hover:bg-rose-50 hover:border-rose-300'
+          : 'bg-slate-50/70 hover:bg-slate-50 border-slate-200/60 hover:border-slate-300/80'
+      }`}
     >
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
         <span
           className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium uppercase tracking-wider ${
             isAlert
               ? 'bg-amber-100/80 text-amber-800 border border-amber-200/60'
+              : isWithin30
+              ? 'bg-rose-200 text-rose-900 border border-rose-300/80'
               : 'bg-rose-100/80 text-rose-800 border border-rose-200/60'
           }`}
         >
@@ -706,9 +729,20 @@ function EventRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0 text-xs text-slate-500 font-medium">
+        {daysLabel && isBirthday && (
+          <span
+            className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+              isWithin30
+                ? 'bg-rose-100 text-rose-700 border-rose-200 shadow-2xs'
+                : 'bg-slate-100 text-slate-600 border-slate-200 shadow-2xs'
+            }`}
+          >
+            {daysLabel}
+          </span>
+        )}
         <span className="inline-flex items-center gap-1 bg-white px-2 py-1 rounded-md border border-slate-200/60 shadow-2xs">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          {event.event_date || '—'}
+          {event.next_occurrence || event.event_date || '—'}
         </span>
         {event.amount != null && (
           <span className="font-semibold text-slate-700 bg-white px-2 py-1 rounded-md border border-slate-200/60 shadow-2xs">

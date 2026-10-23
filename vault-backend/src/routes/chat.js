@@ -6,8 +6,8 @@ const { parseChatAction } = require('../services/chatActionService');
 const {
   ALLOWED_EVENT_TYPES,
   isValidDate,
-  getNextBirthdayDate,
 } = require('../services/eventHelpers');
+const { buildSavedDataSnapshot } = require('../services/savedDataService');
 
 const router = express.Router();
 
@@ -31,17 +31,14 @@ const ANSWER_PROMPT = ({
   question,
   history,
   today,
-  dashboardSnapshot,
+  savedDataText,
   fileChunksText,
 }) => `You are the AI assistant for SafeVault, a personal document vault and dashboard.
 Today's date: ${today}
 
-Context from User's SafeVault:
---- DASHBOARD SNAPSHOT ---
-${dashboardSnapshot}
---- END DASHBOARD SNAPSHOT ---
+${savedDataText}
 
---- RETRIEVED FILE CHUNKS ---
+--- RETRIEVED FILE CHUNKS (FROM UPLOADED DOCUMENTS) ---
 ${fileChunksText}
 --- END RETRIEVED FILE CHUNKS ---
 
@@ -51,38 +48,53 @@ ${(history || []).map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.c
 User's Question: "${question}"
 
 Instructions and Rules:
-1. Questions about MY documents, personal data, dates, amounts, notes or tasks:
-   - Answer ONLY from the context provided above.
-   - If missing from the context, clearly state that you could not find it in their files or records. NEVER guess, assume, or hallucinate personal facts, numbers, dates, or documents (e.g., passport number, insurance number, SSN, personal dates).
-   - Mode should be "files".
-2. General-knowledge questions (e.g. technical concepts like "what is Kafka Schema Registry?", math, recipes, general facts):
-   - Answer normally and conversationally.
-   - You MUST label it clearly as "Not from your files" (e.g. start with "[Not from your files] ").
-   - Mode should be "general".
+1. Questions about the user's notes, tasks, birthdays, alerts, reminders, schedule, or counts (e.g. "when is saideepak's birthday?", "whose birthday is next?", "list all birthdays", "what notes do I have?", "what tasks do I have?", "which tasks did I finish?", "what's coming up this month?", "how many birthdays/tasks/notes do I have?"):
+   - Treat SAVED DATA as the absolute source of truth.
+   - Answer with exact names, dates, days until / remaining, and exact counts.
+   - Return mode: "dashboard".
    - Set used_chunk_indices to [].
-3. If both help (e.g., user asks for general advice related to a document or note):
-   - Combine them and explicitly say which part came from the user's files/records and which part is general advice.
-   - Mode should be "mixed".
+2. Questions about the user's uploaded documents or files:
+   - Answer using the Retrieved File Chunks.
+   - Return mode: "files".
+   - Include 1-based indices of used chunks in used_chunk_indices.
+3. If an answer requires information about personal records, documents, dates, notes, or tasks, but it is NOT found in either SAVED DATA or Retrieved File Chunks:
+   - Clearly state that you could not find it in their saved data or files.
+   - NEVER guess, invent, or hallucinate personal facts (e.g. passport numbers, passwords, policy numbers, etc.).
+   - Return mode: "dashboard" (or "files") with used_chunk_indices: [].
+4. General-knowledge questions (e.g. "what is Kafka Schema Registry?", common knowledge, math, definitions):
+   - Answer normally, accurately, and conversationally.
+   - You MUST label it clearly as "Not from your files" (e.g. start with "[Not from your files] ").
+   - Return mode: "general".
+   - Set used_chunk_indices to [].
+5. If both files and general knowledge or saved data help:
+   - Combine them and explicitly say which part came from files / saved data and which part is general advice.
+   - Return mode: "mixed".
 
 Respond with ONLY a single JSON object (no markdown code blocks, no text before or after):
 {
-  "mode": "files" | "general" | "mixed",
+  "mode": "dashboard" | "files" | "general" | "mixed",
   "answer": "<your complete answer text>",
   "used_chunk_indices": [1, 2]
 }
-Note: used_chunk_indices are 1-based indices of Retrieved File Chunks actually used. Return [] if no file chunks were used (e.g. for general knowledge, questions answered from dashboard snapshot only, or when info was not found).`;
+Note: used_chunk_indices are 1-based indices of Retrieved File Chunks actually used. Return [] if no file chunks were used (e.g. for questions answered from SAVED DATA, general knowledge, or when info was not found).`;
 
-// POST /api/chat { question: string, category?: string, history?: Array<{ role: string, content: string }> }
+// POST /api/chat { question: string, category?: string, history?: Array<{ role: string, content: string }>, client_date?: string }
 router.post('/', requireAuth, async (req, res) => {
-  const { question, category, history } = req.body || {};
+  const { question, category, history, client_date } = req.body || {};
   if (!question || typeof question !== 'string' || question.trim().length === 0) {
     return res.status(400).json({ error: '"question" is required' });
   }
 
   const cleanQuestion = question.trim();
-  const today = new Date().toISOString().slice(0, 10);
+  // Validate client_date format, fallback to server date
+  const today =
+    client_date && isValidDate(client_date)
+      ? client_date
+      : new Date().toISOString().slice(0, 10);
+
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const dayOfWeek = days[new Date().getDay()];
+  const todayDateObj = new Date(today + 'T00:00:00Z');
+  const dayOfWeek = days[todayDateObj.getUTCDay()];
 
   const cleanHistory = Array.isArray(history)
     ? history.slice(-6).map((h) => ({
@@ -199,32 +211,9 @@ router.post('/', requireAuth, async (req, res) => {
       }
     }
 
-    // Step 2: Hybrid Answering
-    const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-    const [notesRes, tasksRes, eventsRes, birthdaysRes, matches] = await Promise.all([
-      req.supabase
-        .from('notes')
-        .select('id, content, created_at')
-        .order('created_at', { ascending: false })
-        .limit(20),
-      req.supabase
-        .from('tasks')
-        .select('id, title, is_done, due_date')
-        .eq('is_done', false)
-        .order('due_date', { ascending: true, nullsFirst: false }),
-      req.supabase
-        .from('extracted_events')
-        .select('id, description, event_date, event_type, amount')
-        .neq('event_type', 'birthday')
-        .gte('event_date', today)
-        .lte('event_date', in30Days)
-        .order('event_date', { ascending: true }),
-      req.supabase
-        .from('extracted_events')
-        .select('id, description, event_date, event_type')
-        .eq('event_type', 'birthday')
-        .not('event_date', 'is', null),
+    // Step 2: Hybrid Answering with comprehensive SAVED DATA snapshot
+    const [{ savedDataText }, matches] = await Promise.all([
+      buildSavedDataSnapshot(req.supabase, req.user.id, today),
       searchChunks(req.supabase, {
         userId: req.user.id,
         question: cleanQuestion,
@@ -234,45 +223,6 @@ router.post('/', requireAuth, async (req, res) => {
         return [];
       }),
     ]);
-
-    const dashboardLines = [];
-    if (tasksRes.data && tasksRes.data.length > 0) {
-      dashboardLines.push('Open Tasks:');
-      tasksRes.data.forEach((t) =>
-        dashboardLines.push(`- ${t.title}${t.due_date ? ` (due: ${t.due_date})` : ''}`)
-      );
-    }
-    if (notesRes.data && notesRes.data.length > 0) {
-      dashboardLines.push('Recent Notes:');
-      notesRes.data.forEach((n) =>
-        dashboardLines.push(`- ${n.content} (added: ${n.created_at.slice(0, 10)})`)
-      );
-    }
-    if (eventsRes.data && eventsRes.data.length > 0) {
-      dashboardLines.push('Upcoming Alerts / Events (next 30 days):');
-      eventsRes.data.forEach((e) =>
-        dashboardLines.push(
-          `- [${e.event_type}] ${e.description} on ${e.event_date}${
-            e.amount != null ? ` (amount: $${e.amount})` : ''
-          }`
-        )
-      );
-    }
-
-    const upcomingBirthdays = (birthdaysRes.data || [])
-      .map((b) => ({ ...b, event_date: getNextBirthdayDate(b.event_date, today) }))
-      .filter((b) => b.event_date && b.event_date >= today && b.event_date <= in30Days)
-      .sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
-
-    if (upcomingBirthdays.length > 0) {
-      dashboardLines.push('Upcoming Birthdays (next 30 days):');
-      upcomingBirthdays.forEach((b) => dashboardLines.push(`- ${b.description}: ${b.event_date}`));
-    }
-
-    const dashboardSnapshot =
-      dashboardLines.length > 0
-        ? dashboardLines.join('\n')
-        : '(No open tasks, notes, or upcoming events)';
 
     const chunksList = matches || [];
     const fileChunksText =
@@ -284,19 +234,19 @@ router.post('/', requireAuth, async (req, res) => {
       question: cleanQuestion,
       history: cleanHistory,
       today,
-      dashboardSnapshot,
+      savedDataText,
       fileChunksText,
     });
 
     const { text: rawAnswer, provider } = await generateText(prompt);
     const parsed = parseAnswerJson(rawAnswer);
 
-    let mode = 'files';
+    let mode = 'dashboard';
     let answerText = rawAnswer;
     let usedIndices = [];
 
     if (parsed) {
-      if (['files', 'general', 'mixed', 'action'].includes(parsed.mode)) {
+      if (['dashboard', 'files', 'general', 'mixed', 'action'].includes(parsed.mode)) {
         mode = parsed.mode;
       }
       if (parsed.answer && typeof parsed.answer === 'string') {

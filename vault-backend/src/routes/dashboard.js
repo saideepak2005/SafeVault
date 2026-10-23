@@ -4,18 +4,22 @@ const {
   ALLOWED_EVENT_TYPES,
   isValidDate,
   getNextBirthdayDate,
+  getDaysBetween,
 } = require('../services/eventHelpers');
 
 const router = express.Router();
 
 // GET /api/dashboard - everything the dashboard needs in one call.
-// Note this does zero LLM calls: all the heavy lifting (classification,
-// date extraction) already happened once at upload time. This is why the
-// dashboard can be refreshed constantly without burning API quota.
+// Accepts optional ?today=YYYY-MM-DD to use user's local date.
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const today =
+      req.query.today && isValidDate(req.query.today)
+        ? req.query.today
+        : new Date().toISOString().slice(0, 10);
+    const in30Days = new Date(Date.parse(today + 'T00:00:00Z') + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
 
     const [alertsRes, birthdaysRes, notesRes, tasksRes] = await Promise.all([
       req.supabase
@@ -39,14 +43,28 @@ router.get('/', requireAuth, async (req, res) => {
     if (notesRes.error) throw new Error(notesRes.error.message);
     if (tasksRes.error) throw new Error(tasksRes.error.message);
 
-    const alerts = alertsRes.data || [];
+    const alerts = (alertsRes.data || []).map((a) => {
+      const daysUntil = a.event_date ? getDaysBetween(today, a.event_date) : null;
+      return {
+        ...a,
+        days_until: daysUntil,
+      };
+    });
+
+    // Birthdays card: ALL saved birthdays sorted by next occurrence
     const birthdays = (birthdaysRes.data || [])
       .map((b) => {
         const nextDate = getNextBirthdayDate(b.event_date, today);
-        return { ...b, event_date: nextDate };
+        const daysUntil = nextDate ? getDaysBetween(today, nextDate) : null;
+        return {
+          ...b,
+          next_occurrence: nextDate,
+          days_until: daysUntil,
+          event_date: nextDate, // existing field preserved for backwards compatibility
+          original_date: b.event_date,
+        };
       })
-      .filter((b) => b.event_date && b.event_date >= today && b.event_date <= in30Days)
-      .sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+      .sort((a, b) => (a.days_until ?? 9999) - (b.days_until ?? 9999));
 
     res.json({
       alerts,

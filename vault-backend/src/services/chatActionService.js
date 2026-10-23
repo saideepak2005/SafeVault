@@ -38,7 +38,7 @@ Guidelines:
   }
 }
 
-4. Inquiring or asking a question (e.g. "what tasks do I have?", "what is Kafka?", "what is my passport number?", "when is Upender's birthday?"):
+4. Inquiring or asking a question (e.g. "what tasks do I have?", "what is Kafka?", "what is my passport number?", "when is Upender's birthday?", "list all birthdays", "what notes do I have?", "what did I note about dizziness?", "what did I note about X?", "what's coming up this month?", "any alerts this year?", "whose birthday is next?", "how many tasks do I have?"):
 {
   "action": "ask"
 }

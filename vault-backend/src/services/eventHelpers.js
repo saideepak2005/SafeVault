@@ -44,9 +44,28 @@ function getNextBirthdayDate(dateStr, todayStr) {
   return getDateForYear(todayY + 1);
 }
 
+function getDaysBetween(dateStrA, dateStrB) {
+  if (!dateStrA || !dateStrB) return 0;
+  const [yA, mA, dA] = dateStrA.split('-').map(Number);
+  const [yB, mB, dB] = dateStrB.split('-').map(Number);
+  const utcA = Date.UTC(yA, mA - 1, dA);
+  const utcB = Date.UTC(yB, mB - 1, dB);
+  return Math.round((utcB - utcA) / (24 * 60 * 60 * 1000));
+}
+
+function formatRelativeDays(days) {
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days > 1) return `in ${days} days`;
+  if (days === -1) return 'yesterday';
+  return `${Math.abs(days)} days ago`;
+}
+
 module.exports = {
   ALLOWED_EVENT_TYPES,
   isLeapYear,
   isValidDate,
   getNextBirthdayDate,
+  getDaysBetween,
+  formatRelativeDays,
 };
